@@ -25,5 +25,5 @@ Developers often struggle to understand large, complex GitHub repositories quick
 4. The AI generates a summary, which is then visualized and converted to speech.
 
 ## 🚀 Future Scope
-- Integration with **Rescue Drones** to explain mission logs.
+- Expanding support for multiple languages.
 - Support for private repositories via SSH.
