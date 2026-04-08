@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reptalk — Repository Talking AI</title>
+    <meta name="description"
+        content="Transform any GitHub repository into readable summaries, visual insights, and audio narration using AI.">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Mermaid.js for flowcharts -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <!-- Chart.js for pie charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'neutral',
+            themeVariables: {
+                primaryColor: '#f6ecdf',
+                primaryTextColor: '#3d3531',
+                primaryBorderColor: '#22c55e',
+                lineColor: '#e5d8cc',
+                secondaryColor: '#fffdfa',
+                tertiaryColor: '#f0e3d2',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '13px',
+            },
+            flowchart: {
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 16,
+                nodeSpacing: 30,
+                rankSpacing: 50,
+            }
+        });
+    </script>
+</head>
+
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loader"></div>
+        <div class="loading-text" id="loading-text">Analyzing repository...</div>
+        <div class="loading-subtext" id="loading-subtext">This may take a moment</div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header__logo">
+                <div class="header__icon">💬</div>
+                <h1 class="header__title">Reptalk</h1>
+            </div>
+            <p class="header__subtitle">See your repository's story, visually and audibly</p>
+        </header>
+
+        <!-- Input Panel -->
+        <section class="input-panel" id="input-panel">
+            <div class="input-row">
+                <input type="text" id="repo-url" class="input-field"
+                    placeholder="https://github.com/username/repository" autocomplete="off" spellcheck="false">
+            </div>
+            <div style="text-align: center;">
+                <button id="analyze-btn" class="btn-primary">
+                    🚀 Analyze Repository
+                </button>
+            </div>
+        </section>
+
+        <!-- Error Banner -->
+        <div class="error-banner" id="error-banner">
+            <span>⚠️</span>
+            <span id="error-text"></span>
+        </div>
+
+        <!-- Output Section -->
+        <section class="output-section" id="output-section">
+            <!-- Stats Bar -->
+            <div class="stats-bar">
+                <div class="stat-chip">
+                    <span class="stat-chip__icon">📊</span>
+                    <div>
+                        <div class="stat-chip__label">Commits</div>
+                        <div class="stat-chip__value" id="stat-commits">0</div>
+                    </div>
+                </div>
+                <div class="stat-chip">
+                    <span class="stat-chip__icon">👥</span>
+                    <div>
+                        <div class="stat-chip__label">Contributors</div>
+                        <div class="stat-chip__value" id="stat-contributors">0</div>
+                    </div>
+                </div>
+                <div class="stat-chip">
+                    <span class="stat-chip__icon">📁</span>
+                    <div>
+                        <div class="stat-chip__label">Repository</div>
+                        <div class="stat-chip__value" id="stat-repo">—</div>
+                    </div>
+                </div>
+                <div class="stat-chip" style="background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.2);">
+                    <span class="stat-chip__icon">🔥</span>
+                    <div>
+                        <div class="stat-chip__label">Difficulty</div>
+                        <div class="stat-chip__value" id="stat-rating" style="color: #ef4444">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="text">
+                    <span class="tab-icon">📝</span> Text Summary
+                </button>
+                <button class="tab-btn" data-tab="visual">
+                    <span class="tab-icon">📊</span> Visual Analytics
+                </button>
+                <button class="tab-btn" data-tab="audio">
+                    <span class="tab-icon">🔊</span> Audio Narration
+                </button>
+            </div>
+
+            <!-- Card: Text Summary -->
+            <div class="result-card active" id="card-text">
+                <div class="result-card__title">
+                    <span class="emoji">📖</span> Project Story
+                </div>
+                <div class="story-text" id="story-text"></div>
+                
+                <hr style="border: none; border-top: 1px solid var(--border-color); margin: 20px 0;">
+                
+                <div class="result-card__title" style="font-size: 1rem; color: var(--accent-orange);">
+                    My Opinion
+                </div>
+                <div style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;" id="story-verdict"></div>
+            </div>
+
+            <!-- Card: Visual Analytics -->
+            <div class="result-card" id="card-visual">
+                <div class="result-card__title">
+                    <span class="emoji">🔀</span> Commit Timeline Flowchart
+                </div>
+                <div class="flowchart-wrapper" id="flowchart-container">
+                    <!-- Mermaid flowchart rendered here -->
+                </div>
+
+                <hr style="border: none; border-top: 1px solid var(--border-color); margin: 28px 0;">
+
+                <div class="result-card__title">
+                    <span class="emoji">🥧</span> Top Contributors
+                </div>
+                <div class="chart-container">
+                    <canvas id="pie-chart"></canvas>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid var(--border-color); margin: 28px 0;">
+
+                <div class="result-card__title">
+                    <span class="emoji">📊</span> Commits Over Timeline
+                </div>
+                <!-- FIXED minimum height layout so timeline is always visible -->
+                <div class="chart-container" style="max-width: 100%; min-height: 300px; height: 350px;">
+                    <canvas id="bar-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Card: Audio -->
+            <div class="result-card" id="card-audio">
+                <div class="result-card__title">
+                    <span class="emoji">🎧</span> Audio Narration
+                </div>
+                <div class="audio-section">
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                        Listen to the AI-generated story of this repository in your selected language.
+                    </p>
+                    <div style="margin-bottom: 15px; display: flex; justify-content: center; gap: 10px;">
+                        <select id="language" class="select-field" style="width: auto;">
+                            <option value="en">🇬🇧 English</option>
+                            <option value="hi">🇮🇳 Hindi</option>
+                            <option value="kn">🇮🇳 Kannada</option>
+                            <option value="te">🇮🇳 Telugu</option>
+                        </select>
+                        <button id="generate-audio-btn" class="btn-audio" onclick="generateAudio()"
+                            style="margin-bottom: 0;">
+                            🎙️ Generate Audio
+                        </button>
+                    </div>
+                    <div class="audio-player-wrapper" id="audio-player-wrapper">
+                        <!-- Audio player rendered here -->
+                    </div>
+                    <div class="audio-status" id="audio-status">
+                        Click "Generate Audio" to create a narration of the story.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Reptalk — Powered by Ollama (phi3:mini)</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

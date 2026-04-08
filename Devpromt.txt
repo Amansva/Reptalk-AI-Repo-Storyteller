@@ -1,0 +1,127 @@
+You are an expert full-stack developer and AI engineer. Build a complete system that converts a GitHub repository into multiple human-readable and visual outputs using a fast and efficient local AI model.
+
+### Core Requirements
+
+1. **Model Selection**
+
+* Use a **fast and efficient local model** (via Ollama or similar).
+* The model must:
+
+  * Generate **concise text summaries**
+  * Support **multilingual output** (English, Hindi, Kannada, Telugu, Tamil, Malayalam)
+  * Be optimized for **low latency**
+* For **text-to-speech**, integrate a suitable TTS system (e.g., Coqui TTS, gTTS, or any fast offline/online engine) that supports the same languages.
+
+---
+
+2. **Input**
+
+* The system should accept a **GitHub repository URL**
+* Clone the repository
+* Extract commit history (author, date, message, files changed)
+
+---
+
+3. **Output Options**
+
+### Option 1: Text Summary
+
+* Generate a **short, concise project story**
+* Allow user to **select output language**
+* Keep summary clear and under ~150–200 words
+* Should describe:
+
+  * Key developments
+  * Important changes
+  * Contributors
+
+---
+
+### Option 2: Visual Analytics
+
+* Generate a **flowchart-style timeline**:
+
+  * Show commits in chronological order
+  * Include:
+
+    * Author name
+    * Short change description
+* Below the flowchart:
+
+  * Display a **pie chart**
+  * Show **top 5 contributors**
+  * Include number of commits per contributor
+
+---
+
+### Option 3: Text-to-Speech
+
+* Convert generated story into **audio**
+* Ask user for **preferred language before generation**
+* Output playable audio file
+* Ensure natural pronunciation for supported languages
+
+---
+
+4. **Frontend Requirements**
+
+* Build a **clean and minimal UI**
+* Features:
+
+  * Input field for GitHub URL
+  * Language selection dropdown
+  * Option selection:
+
+    * Text
+    * Flowchart + Analytics
+    * Audio
+* Display:
+
+  * Text output neatly formatted
+  * Flowchart visualization
+  * Pie chart (contributors)
+  * Audio player for playback
+* Add loading indicators while processing
+
+---
+
+5. **Performance Constraints**
+
+* Optimize for **speed**
+* Limit number of commits processed (e.g., latest 20–30)
+* Ensure fast response time for demo usage
+
+---
+
+6. **Architecture**
+
+* Backend: Python (Flask or FastAPI)
+* AI: Local model via Ollama (fast model like Mistral/Phi)
+* Visualization:
+
+  * Flowchart: Mermaid.js or similar
+  * Charts: Chart.js or matplotlib
+* TTS: Any multilingual engine
+
+---
+
+7. **Behavior**
+
+* System should:
+
+  * Work end-to-end from a single URL input
+  * Not modify existing logic unnecessarily
+  * Extend functionality cleanly
+  * Handle errors (invalid repo, no commits, etc.)
+
+---
+
+### Goal
+
+Build a fast, interactive system that transforms GitHub repositories into:
+
+* Readable summaries
+* Visual insights
+* Audio narration
+
+The final product should be demo-ready, clean, and efficient.
