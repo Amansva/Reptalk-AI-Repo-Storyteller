@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <!-- Chart.js for pie charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script>
         mermaid.initialize({
             startOnLoad: true,
@@ -99,7 +100,8 @@
                         <div class="stat-chip__value" id="stat-repo">—</div>
                     </div>
                 </div>
-                <div class="stat-chip" style="background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.2);">
+                <div class="stat-chip"
+                    style="background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.2);">
                     <span class="stat-chip__icon">🔥</span>
                     <div>
                         <div class="stat-chip__label">Difficulty</div>
@@ -127,13 +129,14 @@
                     <span class="emoji">📖</span> Project Story
                 </div>
                 <div class="story-text" id="story-text"></div>
-                
+
                 <hr style="border: none; border-top: 1px solid var(--border-color); margin: 20px 0;">
-                
+
                 <div class="result-card__title" style="font-size: 1rem; color: var(--accent-orange);">
                     My Opinion
                 </div>
-                <div style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;" id="story-verdict"></div>
+                <div style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;" id="story-verdict">
+                </div>
             </div>
 
             <!-- Card: Visual Analytics -->

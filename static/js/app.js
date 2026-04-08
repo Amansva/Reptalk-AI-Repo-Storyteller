@@ -106,7 +106,7 @@ function renderResults(data) {
     statCommits.textContent = data.total_commits;
     statContributors.textContent = data.contributors.length;
     statRepo.textContent = truncate(data.repo_name, 15);
-    
+
     // AI Difficulty Rating & Verdict
     statRating.textContent = data.rating || "Unknown";
     let ratingColor = '#ef4444'; // default red (Challenge)
@@ -238,6 +238,11 @@ function renderPieChart(contributors) {
         pieChartInstance.destroy();
     }
 
+    const totalCommits = values.reduce((sum, val) => sum + val, 0);
+
+    // Register DataLabels plugin globally just in case (or locally per chart)
+    Chart.register(ChartDataLabels);
+
     const ctx = pieChartCanvas.getContext('2d');
     pieChartInstance = new Chart(ctx, {
         type: 'doughnut',
@@ -269,6 +274,17 @@ function renderPieChart(contributors) {
                         pointStyleWidth: 12,
                     }
                 },
+                datalabels: {
+                    color: '#fff',
+                    font: {
+                        weight: 'bold',
+                        family: "'Inter', sans-serif"
+                    },
+                    formatter: (value) => {
+                        let percentage = ((value / totalCommits) * 100).toFixed(1) + '%';
+                        return percentage;
+                    }
+                },
                 tooltip: {
                     backgroundColor: 'rgba(20, 20, 35, 0.95)',
                     titleColor: '#f0f0f5',
@@ -279,8 +295,9 @@ function renderPieChart(contributors) {
                     titleFont: { family: "'Inter', sans-serif", weight: '600' },
                     bodyFont: { family: "'Inter', sans-serif" },
                     callbacks: {
-                        label: function(context) {
-                            return ` ${context.label}: ${context.parsed} commits`;
+                        label: function (context) {
+                            let percentage = ((context.parsed / totalCommits) * 100).toFixed(1) + '%';
+                            return ` ${context.label}: ${context.parsed} commits (${percentage})`;
                         }
                     }
                 }
@@ -302,10 +319,10 @@ function renderBarChart(commits) {
     // Group commits by date (YYYY-MM-DD format based on original date string)
     const dateCounts = {};
     const reversed = [...commits].reverse();
-    
+
     reversed.forEach(c => {
         // Simple extraction of the date part (e.g., "April 08, 2026")
-        const dateStr = c.date.split(' at ')[0]; 
+        const dateStr = c.date.split(' at ')[0];
         dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
     });
 
@@ -341,7 +358,7 @@ function renderBarChart(commits) {
                     grid: { color: 'var(--border-color)' }
                 },
                 x: {
-                    ticks: { 
+                    ticks: {
                         color: 'var(--text-secondary)',
                         autoSkip: true,
                         maxTicksLimit: 15,
@@ -353,6 +370,9 @@ function renderBarChart(commits) {
             },
             plugins: {
                 legend: { display: false },
+                datalabels: {
+                    display: false // Hide datalabels for timeline, it gets too cluttered
+                },
                 tooltip: {
                     backgroundColor: '#161b22',
                     titleColor: '#c9d1d9',

@@ -103,8 +103,8 @@ if __name__ == "__main__":
     import io
     # Fix Unicode output on Windows console
     if sys.platform == "win32":
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
     import uvicorn
     print("Starting DevTeller server...")
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

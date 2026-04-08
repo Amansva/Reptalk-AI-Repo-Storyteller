@@ -3,3 +3,4 @@ temp_repos/
 *.pyc
 .env
 mapcn/
+static/audio/
