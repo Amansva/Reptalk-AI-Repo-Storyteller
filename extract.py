@@ -39,19 +39,42 @@ def get_diff_summary(commit_hash, repo_dir):
         return [], ""
 
 
-def get_commits(repo_dir, limit=30):
-    """Run git log and return parsed commits with diff info.
+def get_total_commits(repo_dir):
+    """Get total number of commits in the repository."""
+    try:
+        output = subprocess.check_output(
+            ['git', 'rev-list', '--count', 'HEAD'],
+            stderr=subprocess.STDOUT,
+            cwd=repo_dir
+        ).decode('utf-8').strip()
+        return int(output)
+    except Exception:
+        return 0
+
+
+def get_commits(repo_dir, limit=None, skip=0, hashes=None):
+    """Run git log and return parsed commits.
     
     Args:
         repo_dir: Path to the git repository.
-        limit: Maximum number of commits to retrieve (default 30).
+        limit: Maximum number of commits (None for all).
+        skip: Number of commits to skip.
+        hashes: Optional list of specific hashes to fetch.
     """
     cmd = [
         'git', 'log',
-        f'-{limit}',
         '--pretty=format:%H|%an|%ae|%ad|%s',
         '--date=format:%B %d, %Y at %I:%M %p'
     ]
+    if hashes:
+        # Fetch specific commits
+        cmd.extend(hashes)
+    else:
+        if limit:
+            cmd.append(f'-{limit}')
+        if skip:
+            cmd.append(f'--skip={skip}')
+    
     try:
         output = subprocess.check_output(
             cmd, stderr=subprocess.STDOUT, cwd=repo_dir
@@ -61,7 +84,8 @@ def get_commits(repo_dir, limit=30):
         return []
 
     commits = []
-    for line in output.strip().split('\n'):
+    lines = output.strip().split('\n')
+    for line in lines:
         if not line.strip():
             continue
         parts = line.split('|', 4)
@@ -74,10 +98,14 @@ def get_commits(repo_dir, limit=30):
         date       = parts[3]
         message    = parts[4]
 
-        files_changed, diff_summary = get_diff_summary(hash_val, repo_dir)
+        # Optimization: ONLY fetch diff details if we are fetching a small set of commits
+        # If fetching hundreds, it's too slow.
+        files_changed, diff_summary = [], ""
+        if len(lines) <= 100:
+            files_changed, diff_summary = get_diff_summary(hash_val, repo_dir)
 
         commit = {
-            "hash":          hash_val[:7],        # short hash
+            "hash":          hash_val[:7],
             "author":        author,
             "email":         email,
             "date":          date,

@@ -5,44 +5,39 @@ LANGUAGE_PROMPTS = {
     "en": "English",
     "hi": "Hindi (हिंदी)",
     "kn": "Kannada (ಕನ್ನಡ)",
-    "te": "Telugu (తెలుగు)"
+    "te": "Telugu (తెలుగు)",
+    "me": "Malayalam (മലയാളം)",
 }
 
 def generate_story(commits):
     """Send commit details to Ollama (phi3:mini) and get a short human-readable summary, difficulty rating and verdict.
     
     Args:
-        commits: List of commit dicts.
+        commits: List of commit dicts (containing start, middle, and end of history).
     """
-    prompt = """You are a technical code reviewer reading a git log.
-Based on the git commit history below, provide a JSON response containing exactly 3 keys:
-1. "story": A very short, human-readable summary (max 3 sentences) explaining what changed, how, and by whom.
+    prompt = """You are a technical code reviewer reading a git log that spans the entire life of a repository.
+Based on the provided commit history (which includes the beginning, middle milestones, and the latest state), provide a JSON response containing exactly 3 keys:
+1. "story": A short, human-readable summary (upto 6 sentences) telling the story of the repository's evolution. Mention how it started, what major shifts happened in the middle, and where it stands today.
 2. "rating": Rate the codebase complexity based on commits as exactly one of: "Beginner", "Intermediate", or "Challenge".
-3. "verdict": A 1-sentence evaluation of how good the repository is based on commit hygiene and message clarity.
+3. "verdict": A 1-sentence evaluation of the project's journey and current health.
 
 Output ONLY valid raw JSON without any markdown code blocks or additional text. DO NOT wrap the output in ```json...```.
 
-Commit History:
+Commit History (Selected Milestones):
 """
-    # To prevent context window errors, limit to the latest 50 commits
-    latest_commits = commits[:50] if len(commits) > 50 else commits
+    # The commits list is already bookended (Newest ... Middle ... Oldest)
+    # We'll reverse it for the prompt so the AI reads it chronologically (Oldest -> Newest)
+    chronological_commits = list(reversed(commits))
     
-    for c in latest_commits:
+    for c in chronological_commits:
         # Truncate file list if too long
-        files = c['files_changed']
-        if len(files) > 5:
-            files_str = ', '.join(files[:5]) + f" and {len(files)-5} more files"
+        files = c.get('files_changed', [])
+        if len(files) > 3:
+            files_str = ', '.join(files[:3]) + f" and {len(files)-3} more files"
         else:
-            files_str = ', '.join(files)
+            files_str = ', '.join(files) if files else "N/A"
             
-        prompt += f"[{c['date']}] {c['author']} made commit: {c['message']}. Files: {files_str}\n"
-
-    # Safety check: if prompt is getting extremely long, strip file details to save space
-    if len(prompt) > 8000:
-        print("⚠️ Prompt too large, using compact mode (messages only)...")
-        prompt = prompt.split("Commit History:")[0] + "Commit History (Summary):\n"
-        for c in latest_commits:
-            prompt += f"[{c['date']}] {c['author']}: {c['message']}\n"
+        prompt += f"[{c['date']}] {c['author']}: {c['message']}. (Files: {files_str})\n"
 
     print(f"Sending request to Ollama (model: phi3:mini) for structured rating...")
 
@@ -112,3 +107,7 @@ def translate_text(text, target_lang):
     except Exception as e:
         print(f"Translation error: {e}")
         return text
+
+
+#My own AI 
+#Using ai to help me earn money automatically 

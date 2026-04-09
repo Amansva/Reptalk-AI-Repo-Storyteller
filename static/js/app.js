@@ -9,9 +9,23 @@ const analyzeBtn = document.getElementById('analyze-btn');
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingText = document.getElementById('loading-text');
 const loadingSubtext = document.getElementById('loading-subtext');
+const progressBar = document.getElementById('progress-bar');
 const errorBanner = document.getElementById('error-banner');
 const errorText = document.getElementById('error-text');
 const outputSection = document.getElementById('output-section');
+
+// Trending Repos logic
+document.addEventListener('DOMContentLoaded', () => {
+    const trendingCards = document.querySelectorAll('.trending-card');
+    trendingCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const url = card.getAttribute('data-url') || card.querySelector('.trending-card__title').textContent;
+            const fullUrl = url.startsWith('http') ? url : `https://github.com/${url}`;
+            repoInput.value = fullUrl;
+            handleAnalyze();
+        });
+    });
+});
 
 // Tab buttons
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -33,50 +47,59 @@ const statRating = document.getElementById('stat-rating');
 const storyVerdict = document.getElementById('story-verdict');
 
 // ── Event Listeners ──────────────────────────────────────────────────────────
-analyzeBtn.addEventListener('click', handleAnalyze);
+analyzeBtn.addEventListener('click', () => handleAnalyze());
 repoInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleAnalyze();
+});
+
+// AUTO-TRIGGER ON PASTE
+repoInput.addEventListener('paste', (e) => {
+    // Wait for paste to complete
+    setTimeout(() => {
+        const val = repoInput.value.trim();
+        if (isValidGithubUrl(val)) {
+            handleAnalyze();
+        }
+    }, 50);
 });
 
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
 });
 
-// Audio generate button (attached after DOM render in renderResults)
 function attachAudioBtn() {
     const btn = document.getElementById('generate-audio-btn');
     if (btn) {
-        btn.addEventListener('click', () => generateAudio());
+        btn.onclick = () => generateAudio();
     }
 }
 
-// ── Tab Switching ────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function isValidGithubUrl(url) {
+    return url.includes('github.com/') || (url.split('/').length >= 2 && !url.includes('.'));
+}
+
 function switchTab(tabName) {
     tabBtns.forEach(b => b.classList.remove('active'));
     resultCards.forEach(c => c.classList.remove('active'));
 
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    document.getElementById(`card-${tabName}`).classList.add('active');
+    const btn = document.querySelector(`[data-tab="${tabName}"]`);
+    const card = document.getElementById(`card-${tabName}`);
+    if (btn) btn.classList.add('active');
+    if (card) card.classList.add('active');
 }
 
-// ── Main Analysis ────────────────────────────────────────────────────────────
-async function handleAnalyze() {
+// Global handleAnalyze for quickAnalyze access
+window.handleAnalyze = async function() {
     const repoUrl = repoInput.value.trim();
-    const language = langSelect.value;
-
-    if (!repoUrl) {
-        showError('Please enter a GitHub repository URL.');
-        return;
-    }
+    if (!repoUrl) return;
 
     hideError();
-    showLoading('Cloning repository...', 'This may take a moment for large repos');
+    showLoading('Analyzing repository...', 'Fetching commitment history and generating story');
     analyzeBtn.disabled = true;
     audioGenerated = false;
 
     try {
-        updateLoading('Analyzing commits & generating story...', 'Using Mistral AI via Ollama');
-
         const response = await fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -84,13 +107,12 @@ async function handleAnalyze() {
         });
 
         const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Analysis failed.');
-        }
+        if (!response.ok) throw new Error(data.error || 'Analysis failed.');
 
         analysisData = data;
         renderResults(data);
+        outputSection.style.display = 'block';
+        outputSection.scrollIntoView({ behavior: 'smooth' });
 
     } catch (err) {
         showError(err.message);
@@ -98,149 +120,113 @@ async function handleAnalyze() {
         hideLoading();
         analyzeBtn.disabled = false;
     }
-}
+};
 
 // ── Render All Results ───────────────────────────────────────────────────────
 function renderResults(data) {
-    // Stats bar
     statCommits.textContent = data.total_commits;
     statContributors.textContent = data.contributors.length;
-    statRepo.textContent = truncate(data.repo_name, 15);
-
-    // AI Difficulty Rating & Verdict
-    statRating.textContent = data.rating || "Unknown";
-    let ratingColor = '#ef4444'; // default red (Challenge)
-    if (data.rating === 'Beginner') ratingColor = '#10b981'; // green
-    if (data.rating === 'Intermediate') ratingColor = '#f59e0b'; // yellow
+    statRepo.textContent = data.repo_name.split('/').pop() || data.repo_name;
+    statRating.textContent = data.rating || "Standard";
+    
+    // Rating colors for light mode
+    let ratingColor = '#cf222e'; // github red
+    if (data.rating === 'Beginner') ratingColor = '#1f883d'; // github green
+    if (data.rating === 'Intermediate') ratingColor = '#9a6700'; // github orange
     statRating.style.color = ratingColor;
 
-    // Text summary & verdict
     storyText.textContent = data.story;
-    storyVerdict.textContent = data.verdict || "No verdict provided.";
+    storyVerdict.textContent = data.verdict;
 
-    // Flowchart
     renderFlowchart(data.commits);
-
-    // Pie chart
     renderPieChart(data.contributors);
-
-    // Bar chart (Timeline)
     renderBarChart(data.commits);
 
-    // Reset audio section
     audioPlayerWrapper.innerHTML = '';
-    audioStatus.textContent = 'Click "Generate Audio" to create a narration of the story.';
-    const genBtn = document.getElementById('generate-audio-btn');
-    if (genBtn) {
-        genBtn.disabled = false;
-        genBtn.innerHTML = '🎙️ Generate Audio';
-    }
-
-    // Show output section and default to text tab
-    outputSection.classList.add('active');
+    audioStatus.textContent = '';
+    attachAudioBtn();
     switchTab('text');
 }
 
 // ── Mermaid Flowchart ────────────────────────────────────────────────────────
 function renderFlowchart(commits) {
-    // Build mermaid graph from commits (chronological order)
-    const reversed = [...commits].reverse();
-    let mermaidCode = 'graph TD\n';
+    if (!commits || commits.length === 0) {
+        flowchartContainer.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-secondary);">No commit data available for flow chart.</p>';
+        return;
+    }
 
-    // Limit to 15 for readability
-    const display = reversed.slice(Math.max(0, reversed.length - 15));
+    const reversed = [...commits].reverse();
+    const display = reversed.slice(Math.max(0, reversed.length - 12));
+    
+    // Header for Mermaid 10
+    let mermaidCode = 'graph TD\n';
 
     display.forEach((commit, i) => {
         const id = `C${i}`;
         const nextId = `C${i + 1}`;
-
-        const authorClean = sanitizeMermaid(commit.author);
-        const msgClean = sanitizeMermaid(truncate(commit.message, 35));
-        const dateClean = sanitizeMermaid(commit.date.split(' at ')[0]);
-
-        // Build label with line breaks
+        const author = sanitizeMermaid(commit.author);
+        const msg = sanitizeMermaid(truncate(commit.message, 30));
+        
         let icon = '📦';
         if (commit.type === 'Bug Fix') icon = '🔧';
         else if (commit.type === 'Feature') icon = '🚀';
-        else if (commit.type === 'Refactor') icon = '♻️';
-        else if (commit.type === 'Documentation') icon = '📝';
-
-        const label = `${icon} ${authorClean}<br/>${msgClean}<br/>${dateClean}`;
-
-        mermaidCode += `    ${id}["${label}"]\n`;
-
-        if (i < display.length - 1) {
-            mermaidCode += `    ${id} --> ${nextId}\n`;
-        }
+        
+        // Use single quotes for inner string and wrap whole label in double quotes
+        // Avoid <br/> if textContent is used, or ensure it's unescaped
+        mermaidCode += `    ${id}["${icon} ${author}<br/>${msg}"]\n`;
+        if (i < display.length - 1) mermaidCode += `    ${id} --> ${nextId}\n`;
     });
 
-    // Style definitions
-    mermaidCode += `\n    classDef bugfix fill:#7f1d1d,stroke:#ef4444,color:#fca5a5\n`;
-    mermaidCode += `    classDef feature fill:#1e3a5f,stroke:#3b82f6,color:#93c5fd\n`;
-    mermaidCode += `    classDef refactor fill:#3b1f6e,stroke:#8b5cf6,color:#c4b5fd\n`;
-    mermaidCode += `    classDef docs fill:#1a3a2a,stroke:#10b981,color:#6ee7b7\n`;
-    mermaidCode += `    classDef other fill:#1e293b,stroke:#64748b,color:#94a3b8\n`;
+    // Light Theme Styles
+    mermaidCode += `\n    classDef default fill:#ffffff,stroke:#d0d7de,color:#1f2328,stroke-width:1px,font-family:sans-serif\n`;
 
-    display.forEach((commit, i) => {
-        const id = `C${i}`;
-        if (commit.type === 'Bug Fix') mermaidCode += `    class ${id} bugfix\n`;
-        else if (commit.type === 'Feature') mermaidCode += `    class ${id} feature\n`;
-        else if (commit.type === 'Refactor') mermaidCode += `    class ${id} refactor\n`;
-        else if (commit.type === 'Documentation') mermaidCode += `    class ${id} docs\n`;
-        else mermaidCode += `    class ${id} other\n`;
-    });
-
-    // Clear old content and create a fresh mermaid element
     flowchartContainer.innerHTML = '';
     const mermaidDiv = document.createElement('div');
     mermaidDiv.className = 'mermaid';
+    mermaidDiv.style.opacity = '0'; // Hide until rendered
     mermaidDiv.textContent = mermaidCode;
     flowchartContainer.appendChild(mermaidDiv);
 
-    // Use mermaid.run() for Mermaid v10+
     if (window.mermaid) {
-        mermaid.run({ nodes: [mermaidDiv] }).catch(err => {
-            console.warn('Mermaid render warning:', err);
-        });
+        try {
+            mermaid.run({ nodes: [mermaidDiv] }).then(() => {
+                mermaidDiv.style.opacity = '1';
+                mermaidDiv.style.transition = 'opacity 0.3s ease';
+            }).catch(e => {
+                console.error("Mermaid error:", e);
+                flowchartContainer.innerHTML = '<p style="color:var(--accent-red); font-size:12px; text-align:center;">Failed to render flow chart.</p>';
+            });
+        } catch (err) {
+            console.error("Mermaid run caught error:", err);
+        }
     }
 }
 
 function sanitizeMermaid(str) {
-    // Remove characters that break Mermaid syntax
-    return str
-        .replace(/"/g, "'")
-        .replace(/[<>{}|()[\]#&;]/g, '')
-        .replace(/\\/g, '');
+    if (!str) return '';
+    // Remove characters that strictly break Mermaid syntax or quoting
+    return str.replace(/"/g, "'")           // Replace double quotes with single
+              .replace(/[\[\]\(\)\{\}]/g, '') // Remove brackets/braces
+              .replace(/[<>|#;]/g, '')      // Remove other special symbols
+              .replace(/\\/g, '')           // Remove backslashes
+              .trim();
 }
 
 function truncate(str, maxLen) {
-    if (str.length <= maxLen) return str;
-    return str.substring(0, maxLen) + '...';
+    if (!str) return '';
+    return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
 }
 
 // ── Chart.js Pie Chart ───────────────────────────────────────────────────────
 let pieChartInstance = null;
-
 function renderPieChart(contributors) {
     const labels = contributors.map(c => c.name);
     const values = contributors.map(c => c.commits);
-    const colors = [
-        '#8b5cf6',
-        '#3b82f6',
-        '#06b6d4',
-        '#10b981',
-        '#f59e0b',
-        '#ec4899',
-        '#ef4444',
-    ];
+    const colors = ['#0969da', '#1f883d', '#af57db', '#9a6700', '#cf222e', '#656d76', '#bf3989'];
 
-    if (pieChartInstance) {
-        pieChartInstance.destroy();
-    }
-
-    const totalCommits = values.reduce((sum, val) => sum + val, 0);
-
-    // Register DataLabels plugin globally just in case (or locally per chart)
+    if (pieChartInstance) pieChartInstance.destroy();
+    
+    // Register locally if needed
     Chart.register(ChartDataLabels);
 
     const ctx = pieChartCanvas.getContext('2d');
@@ -250,88 +236,41 @@ function renderPieChart(contributors) {
             labels: labels,
             datasets: [{
                 data: values,
-                backgroundColor: colors.slice(0, labels.length),
-                borderColor: 'rgba(10, 10, 15, 0.8)',
-                borderWidth: 3,
-                hoverBorderColor: '#fff',
-                hoverBorderWidth: 2,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#ffffff'
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: true,
             plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#8888a0',
-                        font: {
-                            family: "'Inter', sans-serif",
-                            size: 13,
-                        },
-                        padding: 16,
-                        usePointStyle: true,
-                        pointStyleWidth: 12,
-                    }
-                },
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 12 } } },
                 datalabels: {
-                    color: '#fff',
-                    font: {
-                        weight: 'bold',
-                        family: "'Inter', sans-serif"
-                    },
-                    formatter: (value) => {
-                        let percentage = ((value / totalCommits) * 100).toFixed(1) + '%';
-                        return percentage;
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 20, 35, 0.95)',
-                    titleColor: '#f0f0f5',
-                    bodyColor: '#8888a0',
-                    borderColor: 'rgba(139, 92, 246, 0.3)',
-                    borderWidth: 1,
-                    cornerRadius: 8,
-                    titleFont: { family: "'Inter', sans-serif", weight: '600' },
-                    bodyFont: { family: "'Inter', sans-serif" },
-                    callbacks: {
-                        label: function (context) {
-                            let percentage = ((context.parsed / totalCommits) * 100).toFixed(1) + '%';
-                            return ` ${context.label}: ${context.parsed} commits (${percentage})`;
-                        }
+                    color: '#ffffff',
+                    font: { weight: 'bold' },
+                    formatter: (v, ctx) => {
+                        const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                        return ((v / sum) * 100).toFixed(0) + '%';
                     }
                 }
             },
-            cutout: '55%',
-            animation: {
-                animateRotate: true,
-                duration: 1200,
-                easing: 'easeOutQuart',
-            }
+            cutout: '60%'
         }
     });
 }
 
-// ── Chart.js Bar Chart (Timeline) ────────────────────────────────────────────
+// ── Chart.js Bar Chart ───────────────────────────────────────────────────────
 let barChartInstance = null;
-
 function renderBarChart(commits) {
-    // Group commits by date (YYYY-MM-DD format based on original date string)
     const dateCounts = {};
-    const reversed = [...commits].reverse();
-
-    reversed.forEach(c => {
-        // Simple extraction of the date part (e.g., "April 08, 2026")
-        const dateStr = c.date.split(' at ')[0];
-        dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+    [...commits].reverse().forEach(c => {
+        const d = c.date.split(' at ')[0];
+        dateCounts[d] = (dateCounts[d] || 0) + 1;
     });
 
     const labels = Object.keys(dateCounts);
     const values = Object.values(dateCounts);
 
-    if (barChartInstance) {
-        barChartInstance.destroy();
-    }
+    if (barChartInstance) barChartInstance.destroy();
 
     const ctx = barChartCanvas.getContext('2d');
     barChartInstance = new Chart(ctx, {
@@ -341,124 +280,90 @@ function renderBarChart(commits) {
             datasets: [{
                 label: 'Commits',
                 data: values,
-                backgroundColor: '#58a6ff',
-                borderRadius: 4,
+                backgroundColor: '#0969da',
+                borderRadius: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-                padding: { top: 20, right: 20, bottom: 20, left: 20 }
-            },
             scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { precision: 0, color: '#8b949e' },
-                    grid: { color: 'var(--border-color)' }
-                },
-                x: {
-                    ticks: {
-                        color: 'var(--text-secondary)',
-                        autoSkip: true,
-                        maxTicksLimit: 15,
-                        maxRotation: 45,
-                        minRotation: 45
-                    },
-                    grid: { display: false }
-                }
+                y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } }
             },
-            plugins: {
-                legend: { display: false },
-                datalabels: {
-                    display: false // Hide datalabels for timeline, it gets too cluttered
-                },
-                tooltip: {
-                    backgroundColor: '#161b22',
-                    titleColor: '#c9d1d9',
-                    bodyColor: '#8b949e',
-                    borderColor: '#30363d',
-                    borderWidth: 1,
-                    cornerRadius: 6,
-                    titleFont: { family: "'Inter', sans-serif", weight: '600' }
-                }
-            }
+            plugins: { legend: { display: false }, datalabels: { display: false } }
         }
     });
 }
 
-// ── Audio Generation ─────────────────────────────────────────────────────────
+// ── Audio ────────────────────────────────────────────────────────────────────
 async function generateAudio() {
-    if (!analysisData || !analysisData.story) return;
-
-    const genBtn = document.getElementById('generate-audio-btn');
-    if (genBtn) {
-        genBtn.disabled = true;
-        genBtn.innerHTML = '<span class="btn-spinner"></span> Generating...';
-    }
-    audioStatus.textContent = '🔊 Generating audio narration... Please wait.';
-    audioPlayerWrapper.innerHTML = '';
+    if (!analysisData) return;
+    const btn = document.getElementById('generate-audio-btn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    audioStatus.textContent = '🔊 Preparing narration...';
 
     try {
-        const response = await fetch('/api/tts', {
+        const res = await fetch('/api/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 text: analysisData.story,
-                language: document.getElementById('language').value
+                language: langSelect.value
             })
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Audio generation failed.');
-        }
-
-        audioPlayerWrapper.innerHTML = `
-            <audio controls autoplay id="audio-player">
-                <source src="${data.audio_url}" type="audio/mpeg">
-                Your browser does not support the audio element.
-            </audio>
-        `;
-        audioStatus.textContent = '✅ Audio ready! Press play to listen.';
-        audioGenerated = true;
-        if (genBtn) {
-            genBtn.innerHTML = '🎙️ Regenerate Audio';
-            genBtn.disabled = false;
-        }
-
-    } catch (err) {
-        audioStatus.textContent = `❌ ${err.message}`;
-        if (genBtn) {
-            genBtn.innerHTML = '🎙️ Retry';
-            genBtn.disabled = false;
-        }
+        audioPlayerWrapper.innerHTML = `<audio controls autoplay style="width: 100%; max-width: 400px; margin: 0 auto; display: block;"><source src="${data.audio_url}" type="audio/mpeg"></audio>`;
+        audioStatus.textContent = '✅ Ready to listen';
+    } catch (e) {
+        audioStatus.textContent = '❌ Error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Regenerate Narration';
     }
 }
 
-// ── Loading Helpers ──────────────────────────────────────────────────────────
-function showLoading(text, subtext) {
+// ── UI Helpers ───────────────────────────────────────────────────────────────
+let progressInterval = null;
+function showLoading(text, sub) {
     loadingText.textContent = text;
-    loadingSubtext.textContent = subtext || '';
+    loadingSubtext.textContent = sub || 'Fetching complete history...';
     loadingOverlay.classList.add('active');
-}
-
-function updateLoading(text, subtext) {
-    loadingText.textContent = text;
-    if (subtext) loadingSubtext.textContent = subtext;
+    
+    // Reset and start progress bar
+    if (progressBar) {
+        progressBar.style.width = '0%';
+        let progress = 0;
+        if (progressInterval) clearInterval(progressInterval);
+        
+        progressInterval = setInterval(() => {
+            if (progress < 90) {
+                // Speed up initially, slow down as it gets near 90%
+                const increment = (90 - progress) / 30;
+                progress += increment;
+                progressBar.style.width = `${progress}%`;
+            }
+        }, 500);
+    }
 }
 
 function hideLoading() {
-    loadingOverlay.classList.remove('active');
+    if (progressInterval) clearInterval(progressInterval);
+    if (progressBar) {
+        progressBar.style.width = '100%';
+        setTimeout(() => {
+            loadingOverlay.classList.remove('active');
+        }, 300);
+    } else {
+        loadingOverlay.classList.remove('active');
+    }
 }
 
-// ── Error Helpers ────────────────────────────────────────────────────────────
-function showError(message) {
-    errorText.textContent = message;
-    errorBanner.classList.add('active');
+function showError(msg) {
+    errorText.textContent = msg;
+    errorBanner.style.display = 'block';
 }
-
-function hideError() {
-    errorBanner.classList.remove('active');
-}
+function hideError() { errorBanner.style.display = 'none'; }

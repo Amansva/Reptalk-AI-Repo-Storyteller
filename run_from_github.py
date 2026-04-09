@@ -3,7 +3,7 @@ import subprocess
 import shutil
 from urllib.parse import urlparse
 
-from extract import get_commits, group_commits, get_contributor_stats
+from extract import get_commits, group_commits, get_contributor_stats, get_total_commits
 from ai import generate_story
 
 
@@ -20,10 +20,11 @@ def clone_repo(repo_url):
     if os.path.exists(clone_dir):
         print(f"✅ Repo '{repo_name}' already exists, reusing...")
     else:
-        print(f"Cloning {repo_url}...")
+        print(f"Cloning {repo_url} (full history)...")
         try:
+            # Removed --depth 50 to get full history
             subprocess.run(
-                ["git", "clone", "--depth", "50", repo_url, clone_dir],
+                ["git", "clone", repo_url, clone_dir],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -40,34 +41,50 @@ def clone_repo(repo_url):
 def run_analysis(repo_url):
     """
     Full analysis pipeline: clone → extract → summarize → return structured data.
-    Returns a dict with commits, story, and contributor stats.
     """
     # Step 1: Clone repo
     repo_path = clone_repo(repo_url)
 
-    # Step 2: Extract commits (limit 100)
-    commits = get_commits(repo_path, limit=100)
+    # Step 2: Get total commits
+    total_count = get_total_commits(repo_path)
+    
+    # Step 3: Sample commits for the Story
+    # We want: Start (first 15), Middle (3), End (15)
+    # Total AI context window is roughly 50 commits max
+    if total_count <= 40:
+        story_commits = get_commits(repo_path)
+    else:
+        # Fetch first 15 (oldest)
+        start_commits = get_commits(repo_path, limit=15, skip=total_count - 15)
+        # Fetch middle 3
+        mid_index = total_count // 2
+        middle_commits = get_commits(repo_path, limit=3, skip=mid_index - 1)
+        # Fetch last 15 (newest)
+        end_commits = get_commits(repo_path, limit=15)
+        
+        story_commits = end_commits + middle_commits + start_commits
 
-    if not commits:
+    if not story_commits:
         return {"error": "No commits found in the repository."}
 
-    # Step 3: Get contributor stats
-    contributors = get_contributor_stats(commits)
+    # Step 4: Get contributor stats (from a larger sample for accuracy)
+    # Fetching up to 500 commits for stats is fast (no diff details)
+    stats_commits = get_commits(repo_path, limit=500)
+    contributors = get_contributor_stats(stats_commits)
 
-    # Step 4: Generate story and ratings
-    ai_data = generate_story(commits)
+    # Step 5: Generate story and ratings (passing the sampled history)
+    ai_data = generate_story(story_commits)
 
-    # ensure ai_data is dict if raw string leaked
     if isinstance(ai_data, str):
         ai_data = {"story": ai_data, "rating": "Unknown", "verdict": "Could not assess."}
 
     return {
-        "commits": commits,
+        "commits": story_commits[:15], # UI only shows recent ones in flowchart anyway
         "story": ai_data.get("story", "No story generated."),
         "rating": ai_data.get("rating", "Unknown"),
         "verdict": ai_data.get("verdict", ""),
         "contributors": [{"name": name, "commits": count} for name, count in contributors],
-        "total_commits": len(commits),
+        "total_commits": total_count,
         "repo_name": os.path.basename(repo_path),
     }
 
